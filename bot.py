@@ -1,8 +1,9 @@
 import telebot
 import json
 import difflib
+import os
 
-token = 'ВАШ_ТОКЕН'
+token = os.environ.get('TOKEN')
 bot = telebot.TeleBot(token)
 
 def load_data():
@@ -21,14 +22,21 @@ characters, gear_dictionary = load_data()
 
 @bot.message_handler(commands=['start'])
 def start_message(message):
-    bot.send_message(message.chat.id, 'введи имя персонажа')
+    bot.send_message(message.chat.id, 'введи имя персонажа и номер тира')
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-    user_input = message.text
-    char_names = [c['name'] for c in characters]
+    text = message.text.split()
+    tier_requested = None
     
-    match = difflib.get_close_matches(user_input, char_names, n=1, cutoff=0.5)
+    if text[-1].isdigit():
+        tier_requested = int(text[-1])
+        name_input = ' '.join(text[:-1])
+    else:
+        name_input = ' '.join(text)
+
+    char_names = [c['name'] for c in characters]
+    match = difflib.get_close_matches(name_input, char_names, n=1, cutoff=0.5)
     
     if not match:
         bot.send_message(message.chat.id, 'персонаж не найден')
@@ -41,18 +49,16 @@ def handle_message(message):
     
     for level in char_data['gear_levels']:
         tier = level['tier']
+        if tier_requested and tier != tier_requested:
+            continue
+            
         items = level['gear']
-        
         response += f'тир {tier}\n'
         for item_id in items:
-            item_name = gear_dictionary.get(item_id, f'неизвестный предмет {item_id}')
+            item_name = gear_dictionary.get(item_id, item_id)
             response += f'— {item_name}\n'
         response += '\n'
     
-    if len(response) > 4096:
-        for x in range(0, len(response), 4096):
-            bot.send_message(message.chat.id, response[x:x+4096])
-    else:
-        bot.send_message(message.chat.id, response)
+    bot.send_message(message.chat.id, response.strip())
 
 bot.polling(none_stop=True)
