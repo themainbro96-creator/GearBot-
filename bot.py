@@ -21,7 +21,7 @@ def load_data():
 characters, gear_dictionary = load_data()
 
 def escape_md(text):
-    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    escape_chars = r'_*[]()~`#+-=|{}.!'
     return ''.join('\\' + c if c in escape_chars else c for c in str(text))
 
 @bot.message_handler(commands=['start'])
@@ -73,7 +73,7 @@ def handle_message(message):
         response += f'*{escape_md(tier_label)}*\n'
         
         items = level['gear']
-        # Каждый предмет начинается с > для создания единого блока цитаты
+        # Ставим > перед каждой строкой, чтобы они объединились в одну цитату
         for i, item_id in enumerate(items):
             item_name = gear_dictionary.get(item_id, item_id)
             num = slot_emojis[i] if i < len(slot_emojis) else "▫️"
@@ -84,6 +84,7 @@ def handle_message(message):
         bot.send_message(message.chat.id, 'тир не найден')
         return
 
+    # Картинка прикрепляется всегда при наличии
     if char_image:
         try:
             bot.send_photo(message.chat.id, char_image, caption=response.strip())
