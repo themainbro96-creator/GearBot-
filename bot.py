@@ -2,7 +2,6 @@ import telebot
 import json
 import difflib
 import os
-from telebot import types
 
 token = os.environ.get('TOKEN')
 bot = telebot.TeleBot(token, parse_mode='MarkdownV2')
@@ -61,7 +60,7 @@ def handle_message(message):
     response = f'*{escape_md(target_name)}*\n'
     response += f'_{escape_md(role)}, {side_emoji} {escape_md(alignment)}_\n\n'
     
-    share_content = f"Я нашел инфу о снаряжении {target_name} в @SwgohGear_bot\! 🚀\n"
+    slot_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣"]
     
     found_any_tier = False
     for level in char_data['gear_levels']:
@@ -71,38 +70,26 @@ def handle_message(message):
             
         found_any_tier = True
         tier_label = f'тир {tier}' if tier < 13 else 'Relic'
-        items_block = ""
-        for item_id in level['gear']:
+        response += f'*{escape_md(tier_label)}*\n'
+        
+        items = level['gear']
+        # Каждый предмет начинается с > для создания единого блока цитаты
+        for i, item_id in enumerate(items):
             item_name = gear_dictionary.get(item_id, item_id)
-            items_block += f'— {escape_md(item_name)}\n'
-        
-        # Накладываем цитату на весь блок тира
-        tier_info = f'*{escape_md(tier_label)}*\n'
-        tier_info += f'**>** {items_block}\n'
-        response += tier_info
-        
-        if tier_requested:
-            share_content += f"Уровень снаряжения: {tier}\n{items_block}"
+            num = slot_emojis[i] if i < len(slot_emojis) else "▫️"
+            response += f'\>{num} {escape_md(item_name)}\n'
+        response += '\n'
 
     if not found_any_tier:
-        bot.send_message(message.chat.id, 'юнит не найден')
+        bot.send_message(message.chat.id, 'тир не найден')
         return
-
-    # Кнопка поделиться
-    keyboard = types.InlineKeyboardMarkup()
-    # switch_inline_query_current_chat вставит текст для пересылки
-    share_button = types.InlineKeyboardButton(
-        text="Поделиться", 
-        switch_inline_query=f"Я нашел инфу о снаряжении {target_name} в @SwgohGear_bot! 🚀"
-    )
-    keyboard.add(share_button)
 
     if char_image:
         try:
-            bot.send_photo(message.chat.id, char_image, caption=response, reply_markup=keyboard)
+            bot.send_photo(message.chat.id, char_image, caption=response.strip())
         except:
-            bot.send_message(message.chat.id, response, reply_markup=keyboard)
+            bot.send_message(message.chat.id, response.strip())
     else:
-        bot.send_message(message.chat.id, response, reply_markup=keyboard)
+        bot.send_message(message.chat.id, response.strip())
 
 bot.polling(none_stop=True)
