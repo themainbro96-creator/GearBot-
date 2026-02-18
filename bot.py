@@ -22,7 +22,6 @@ def load_data():
 characters, gear_dictionary = load_data()
 
 def escape_md(text):
-    # Экранируем спецсимволы для MarkdownV2
     escape_chars = r'_*[]()~`>#+-=|{}.!'
     return ''.join('\\' + c if c in escape_chars else c for c in str(text))
 
@@ -59,34 +58,42 @@ def handle_message(message):
     if 'Light Side' in alignment: side_emoji = '🔵'
     elif 'Dark Side' in alignment: side_emoji = '🔴'
     
-    header = f'*{escape_md(target_name)}*\n'
-    header += f'_{escape_md(role)}, {side_emoji} {escape_md(alignment)}_\n\n'
+    response = f'*{escape_md(target_name)}*\n'
+    response += f'_{escape_md(role)}, {side_emoji} {escape_md(alignment)}_\n\n'
     
-    response = header
+    share_content = f"Я нашел инфу о снаряжении {target_name} в @SwgohGear_bot\! 🚀\n"
+    
+    found_any_tier = False
     for level in char_data['gear_levels']:
         tier = level['tier']
-        
-        # Фильтр по тиру, если юзер указал конкретный
         if tier_requested and tier != tier_requested:
             continue
             
+        found_any_tier = True
         tier_label = f'тир {tier}' if tier < 13 else 'Relic'
-        response += f'*{tier_label}*\n'
-        
-        # Формируем блок цитаты через HTML-подобный синтаксис или символ >
-        items_list = ""
+        items_block = ""
         for item_id in level['gear']:
             item_name = gear_dictionary.get(item_id, item_id)
-            items_list += f'— {escape_md(item_name)}\n'
+            items_block += f'— {escape_md(item_name)}\n'
         
-        # В MarkdownV2 цитата делается так:
-        response += f'**>** {items_list}\n'
+        # Накладываем цитату на весь блок тира
+        tier_info = f'*{escape_md(tier_label)}*\n'
+        tier_info += f'**>** {items_block}\n'
+        response += tier_info
+        
+        if tier_requested:
+            share_content += f"Уровень снаряжения: {tier}\n{items_block}"
 
-    # Создаем инлайн-кнопку "Поделиться"
+    if not found_any_tier:
+        bot.send_message(message.chat.id, 'юнит не найден')
+        return
+
+    # Кнопка поделиться
     keyboard = types.InlineKeyboardMarkup()
+    # switch_inline_query_current_chat вставит текст для пересылки
     share_button = types.InlineKeyboardButton(
         text="Поделиться", 
-        switch_inline_query=f"{target_name} {tier_requested if tier_requested else ''}"
+        switch_inline_query=f"Я нашел инфу о снаряжении {target_name} в @SwgohGear_bot! 🚀"
     )
     keyboard.add(share_button)
 
