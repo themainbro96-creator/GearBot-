@@ -3,27 +3,15 @@ import json
 import difflib
 import os
 import sys
-import threading
-from flask import Flask
 
-# --- Flask для Render ---
-app = Flask(__name__)
-
-@app.route('/')
-def health_check():
-    return "Bot is running!", 200
-
-def run_flask():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
-
-# --- Логика бота ---
+# Получаем токен из переменных окружения Render
 TOKEN = os.environ.get('TOKEN')
 
 if not TOKEN:
-    print("Ошибка: Переменная TOKEN не найдена в окружении")
+    print("Ошибка: Переменная TOKEN не найдена")
     sys.exit(1)
 
+# MarkdownV2 критичен для правильных цитат
 bot = telebot.TeleBot(TOKEN, parse_mode='MarkdownV2')
 
 def load_data():
@@ -45,33 +33,31 @@ def load_data():
 characters, gear_dictionary = load_data()
 
 def escape_md(text):
+    # Экранируем спецсимволы, чтобы бот не падал от точек или тире в названиях
     escape_chars = r'_*[]()~`#+-=|{}.!'
     return ''.join('\\' + c if c in escape_chars else c for c in str(text))
 
 @bot.message_handler(commands=['start'])
 def start_message(message):
-    bot.send_message(
-        message.chat.id, 
-        r'Напиши имя юнита и номер тира \(при необходимости\), а я выдам тебе информацию о его снаряжении'
-    )
+    bot.send_message(message.chat.id, 'напиши имя юнита и номер тира \(при необходимости\), а я выдам тебе информацию о его снаряжении')
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-    msg_parts = message.text.split()
-    if not msg_parts: return
-
+    text_parts = message.text.split()
     tier_requested = None
-    if msg_parts[-1].isdigit():
-        tier_requested = int(msg_parts[-1])
-        name_input = ' '.join(msg_parts[:-1])
+    
+    # Проверка тира в конце сообщения
+    if text_parts[-1].isdigit():
+        tier_requested = int(text_parts[-1])
+        name_input = ' '.join(text_parts[:-1])
     else:
-        name_input = ' '.join(msg_parts)
+        name_input = ' '.join(text_parts)
 
     char_names = [c['name'] for c in characters]
     match = difflib.get_close_matches(name_input, char_names, n=1, cutoff=0.5)
     
     if not match:
-        bot.send_message(message.chat.id, 'Юнит не найден')
+        bot.send_message(message.chat.id, 'юнит не найден')
         return
 
     target_name = match[0]
@@ -81,62 +67,48 @@ def handle_message(message):
     alignment = char_data.get('alignment', '')
     char_image = char_data.get('image', '')
 
+    # Эмодзи стороны
     side_emoji = '⚪️'
     if 'Light Side' in alignment: side_emoji = '🔵'
     elif 'Dark Side' in alignment: side_emoji = '🔴'
     
-    # 1. Заголовок
+    # Шапка сообщения
     response = f'*{escape_md(target_name)}*\n'
     response += f'_{escape_md(role)}, {side_emoji} {escape_md(alignment)}_\n\n'
     
     slot_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣"]
     found_any_tier = False
 
-    for level in char_data.get('gear_levels', []):
+    for level in char_data['gear_levels']:
         tier = level['tier']
         if tier_requested and tier != tier_requested:
             continue
             
         found_any_tier = True
         tier_label = f'тир {tier}' if tier < 13 else 'Relic'
+        response += f'*{escape_md(tier_label)}*\n'
         
-        # Название тира (не жирное)
-        response += f'{escape_md(tier_label)}\n'
-        
-        # Начало блока цитаты для материалов
-        items = level.get('gear', [])
+        items = level['gear']
+        # Цитата: ставим '>' только перед строками с материалами
         for i, item_id in enumerate(items):
             item_name = gear_dictionary.get(item_id, item_id)
-            num = slot_emojis[i] if i < len(slot_emojis) else "▫️"
-            # Символ \> перед каждой строкой создает сплошной блок цитаты
-            response += fr'\>{num} {escape_md(item_name)}' + '\n'
-        
-        # Добавляем пустую строку после цитаты для визуального разделения тиров
+            num = slot_emojis[i] if i < len(slot_emojis) else "—"
+            response += f'\>{num} {escape_md(item_name)}\n'
         response += '\n'
 
     if not found_any_tier:
-        bot.send_message(message.chat.id, 'Тир не найден')
+        bot.send_message(message.chat.id, 'тир не найден')
         return
 
-    final_text = response.strip()
-
-    # 2. Отправка: Текст всегда прикреплен к картинке (в caption)
+    # Отправка фото с текстом в подписи (caption)
     if char_image:
         try:
-            # Ограничение Telegram на подпись к фото — 1024 символа
-            if len(final_text) <= 1024:
-                bot.send_photo(message.chat.id, char_image, caption=final_text)
-            else:
-                # Если текст экстремально длинный (все тиры сразу), 
-                # шлем фото первым, а текст следом (техническое ограничение TG)
-                bot.send_photo(message.chat.id, char_image)
-                bot.send_message(message.chat.id, final_text)
+            bot.send_photo(message.chat.id, char_image, caption=response.strip())
         except Exception:
-            bot.send_message(message.chat.id, final_text)
+            bot.send_message(message.chat.id, response.strip())
     else:
-        bot.send_message(message.chat.id, final_text)
+        bot.send_message(message.chat.id, response.strip())
 
 if __name__ == '__main__':
-    threading.Thread(target=run_flask).start()
     print("Бот запущен...")
-    bot.infinity_polling(timeout=10, long_polling_timeout=5)
+    bot.infinity_polling()
