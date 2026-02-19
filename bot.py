@@ -6,7 +6,7 @@ import sys
 import threading
 from flask import Flask
 
-# --- Инициализация Flask для Render ---
+# --- Flask для Render ---
 app = Flask(__name__)
 
 @app.route('/')
@@ -14,11 +14,10 @@ def health_check():
     return "Bot is running!", 200
 
 def run_flask():
-    # Render передает порт в переменную окружения PORT
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
-# --- Основная логика бота ---
+# --- Логика бота ---
 TOKEN = os.environ.get('TOKEN')
 
 if not TOKEN:
@@ -59,10 +58,9 @@ def start_message(message):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     msg_parts = message.text.split()
-    tier_requested = None
-    
     if not msg_parts: return
 
+    tier_requested = None
     if msg_parts[-1].isdigit():
         tier_requested = int(msg_parts[-1])
         name_input = ' '.join(msg_parts[:-1])
@@ -87,12 +85,12 @@ def handle_message(message):
     if 'Light Side' in alignment: side_emoji = '🔵'
     elif 'Dark Side' in alignment: side_emoji = '🔴'
     
-    header = f'*{escape_md(target_name)}*\n'
-    header += f'_{escape_md(role)}, {side_emoji} {escape_md(alignment)}_\n\n'
+    # 1. Заголовок
+    response = f'*{escape_md(target_name)}*\n'
+    response += f'_{escape_md(role)}, {side_emoji} {escape_md(alignment)}_\n\n'
     
     slot_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣"]
     found_any_tier = False
-    body = ""
 
     for level in char_data.get('gear_levels', []):
         tier = level['tier']
@@ -101,26 +99,36 @@ def handle_message(message):
             
         found_any_tier = True
         tier_label = f'тир {tier}' if tier < 13 else 'Relic'
-        body += f'{escape_md(tier_label)}\n' # Тир не жирный
         
+        # Название тира (не жирное)
+        response += f'{escape_md(tier_label)}\n'
+        
+        # Начало блока цитаты для материалов
         items = level.get('gear', [])
         for i, item_id in enumerate(items):
             item_name = gear_dictionary.get(item_id, item_id)
             num = slot_emojis[i] if i < len(slot_emojis) else "▫️"
-            body += fr'\>{num} {escape_md(item_name)}' + '\n' # Цитата корректно
-        body += '\n'
+            # Символ \> перед каждой строкой создает сплошной блок цитаты
+            response += fr'\>{num} {escape_md(item_name)}' + '\n'
+        
+        # Добавляем пустую строку после цитаты для визуального разделения тиров
+        response += '\n'
 
     if not found_any_tier:
         bot.send_message(message.chat.id, 'Тир не найден')
         return
 
-    final_text = (header + body).strip()
+    final_text = response.strip()
 
+    # 2. Отправка: Текст всегда прикреплен к картинке (в caption)
     if char_image:
         try:
+            # Ограничение Telegram на подпись к фото — 1024 символа
             if len(final_text) <= 1024:
                 bot.send_photo(message.chat.id, char_image, caption=final_text)
             else:
+                # Если текст экстремально длинный (все тиры сразу), 
+                # шлем фото первым, а текст следом (техническое ограничение TG)
                 bot.send_photo(message.chat.id, char_image)
                 bot.send_message(message.chat.id, final_text)
         except Exception:
@@ -129,8 +137,6 @@ def handle_message(message):
         bot.send_message(message.chat.id, final_text)
 
 if __name__ == '__main__':
-    # Запускаем Flask в отдельном потоке
     threading.Thread(target=run_flask).start()
-    
     print("Бот запущен...")
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
