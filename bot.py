@@ -6,47 +6,36 @@ from threading import Thread
 from telebot import types
 from fuzzywuzzy import process
 
-# Берем токен из секретов Render
+# Токен из секретов Render
 TOKEN = os.environ.get('TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
 def load_data():
     with open('Swgoh_Characters.json', 'r', encoding='utf-8') as f:
-        data = json.load(f)
-        chars = json.loads(data['text'])
+        chars = json.loads(json.load(f)['text'])
     with open('Swgoh_Gear.json', 'r', encoding='utf-8') as f:
-        data = json.load(f)
-        gear = json.loads(data['text'])
+        gear = json.loads(json.load(f)['text'])
     return chars, gear
 
 chars_data, gear_data = load_data()
 gear_dict = {item['base_id']: item['name'] for item in gear_data}
 char_names = [c['name'] for c in chars_data]
 
-def get_char_details(char):
-    desc = char.get('description', '').lower()
-    # Проверка стороны
-    if "dark side" in desc:
-        emoji, side = "🔴", "Dark Side"
-    elif "light side" in desc:
+def get_char_info(char):
+    # Точное определение стороны по полю alignment
+    # 2 - Light, 3 - Dark, остальные - Neutral
+    align = char.get('alignment', 1)
+    if align == 2:
         emoji, side = "🔵", "Light Side"
+    elif align == 3:
+        emoji, side = "🔴", "Dark Side"
     else:
         emoji, side = "⚪️", "Neutral"
     
-    # Определение роли
-    role = "Unit"
-    roles = ["Attacker", "Support", "Tank", "Healer", "Leader"]
-    for r in roles:
-        if r.lower() in desc:
-            role = r
-            break
-            
+    # Роль (берем из description, так как там "Attacker", "Support" и т.д.)
+    desc = char.get('description', 'Unit')
+    role = desc.split()[0].replace(',', '') # Берем первое слово
     return role, emoji, side
-
-def format_gear_list(char, tier_idx):
-    gear_ids = char['gear_levels'][tier_idx]['gear']
-    items = [gear_dict.get(g_id, f"Unknown ({g_id})") for g_id in gear_ids]
-    return " — " + "\n — ".join(items)
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -60,46 +49,50 @@ def handle_message(message):
     tier_requested = None
     search_query = text
 
-    # Проверяем, указан ли тир в конце
+    # Если последнее слово - число, значит это запрос конкретного тира
     if len(parts) > 1 and parts[-1].isdigit():
         tier_requested = int(parts[-1])
         search_query = " ".join(parts[:-1])
     
+    # Поиск персонажа
     best_match, score = process.extractOne(search_query, char_names)
     
     if score > 60:
         char = next(c for c in chars_data if c['name'] == best_match)
-        role, side_emoji, side_name = get_char_details(char)
-        header = f"<b>{char['name']}</b>\n<i>{role}, {side_emoji} {side_name}</i>\n\n"
+        role, side_emoji, side_name = get_char_info(char)
         
+        base_header = f"*{char['name']}*\n_{role}, {side_emoji} {side_name}_"
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("Configuration", callback_data=f"conf_{char['base_id']}"))
+        markup.add(types.InlineKeyboardButton("Configuration", callback_data=f"c_{char['base_id']}"))
 
         if tier_requested:
-            # Одиночный тир
+            # СТРОГО ОДИН ТИР
             t_idx = max(1, min(tier_requested, 13)) - 1
-            gear_list = format_gear_list(char, t_idx)
-            full_message = f"{header}<b>Tier {t_idx + 1}</b>\n<blockquote>{gear_list}</blockquote>"
+            gear_ids = char['gear_levels'][t_idx]['gear']
+            gear_list = "\n".join([f"— {gear_dict.get(g_id, g_id)}" for g_id in gear_ids])
+            
+            caption = f"{base_header}\n\n<blockquote>{gear_list}</blockquote>"
+            bot.send_photo(message.chat.id, char['image'], caption=caption, parse_mode="HTML", reply_markup=markup)
+        
         else:
-            # Полная сводка (все 13 тиров)
-            full_message = f"{header}<b>Full Gear Summary (Tier 1-13):</b>\n"
+            # ВСЕ ТИРЫ (Full Summary)
+            bot.send_photo(message.chat.id, char['image'], caption=base_header, parse_mode="HTML")
+            
+            full_summary = ""
             for i in range(13):
-                items = [gear_dict.get(g_id, "???") for g_id in char['gear_levels'][i]['gear']]
-                # В полной сводке пишем в одну строку для компактности
-                full_message += f"<b>T{i+1}:</b> {', '.join(items)}\n\n"
-
-        try:
-            # Если сообщение слишком длинное (больше 1024 символов для caption), 
-            # отправляем картинку отдельно, а текст отдельно.
-            if len(full_message) > 1000:
-                bot.send_photo(message.chat.id, char['image'])
-                bot.send_message(message.chat.id, full_message, parse_mode="HTML", reply_markup=markup)
-            else:
-                bot.send_photo(message.chat.id, char['image'], caption=full_message, parse_mode="HTML", reply_markup=markup)
-        except Exception as e:
-            bot.reply_to(message, "Произошла ошибка при выводе данных. Возможно, персонаж слишком сложный!")
+                g_ids = char['gear_levels'][i]['gear']
+                items = [gear_dict.get(g_id, "???") for g_id in g_ids]
+                tier_text = f"<b>Tier {i+1}:</b>\n— " + "\n— ".join(items) + "\n\n"
+                
+                # Telegram лимит 4096 символов, если текст длинный — дробим
+                if len(full_summary) + len(tier_text) > 3800:
+                    bot.send_message(message.chat.id, full_summary, parse_mode="HTML")
+                    full_summary = ""
+                full_summary += tier_text
+            
+            bot.send_message(message.chat.id, full_summary, parse_mode="HTML", reply_markup=markup)
     else:
-        bot.reply_to(message, "Юнит не найден. Попробуй еще раз.")
+        bot.reply_to(message, "Юнит не найден.")
 
 # --- Render Keep-Alive ---
 server = Flask('')
@@ -109,4 +102,6 @@ def run(): server.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
 if __name__ == "__main__":
     Thread(target=run).start()
+    bot.remove_webhook()
+    print("Бот запущен...")
     bot.infinity_polling()
