@@ -14,72 +14,101 @@ def load_data():
         chars = json.loads(json.load(f)['text'])
     with open('Swgoh_Gear.json', 'r', encoding='utf-8') as f:
         gear = json.loads(json.load(f)['text'])
-    return chars, gear
+    try:
+        with open('Relic_Requirements.json', 'r', encoding='utf-8') as f:
+            relics = json.load(f)
+    except: relics = {}
+    return chars, gear, relics
 
-chars_data, gear_data = load_data()
+chars_data, gear_data, relic_reqs = load_data()
 gear_dict = {item['base_id']: item['name'] for item in gear_data}
 char_names = [c['name'] for c in chars_data]
 
-def get_side_info(align_id):
-    if align_id == 2:
-        return "🔵", "Light Side"
-    if align_id == 3:
-        return "🔴", "Dark Side"
-    return "⚪️", "Neutral"
+def get_char_header(char):
+    role = char.get('description', 'Unit').split(',')[0]
+    align = char.get('alignment', 1)
+    mapping = {2: ("🔵", "Light Side"), 3: ("🔴", "Dark Side")}
+    emoji, side = mapping.get(align, ("⚪️", "Neutral"))
+    return f"**{char['name']}**\n__{role}, {emoji} {side}__"
+
+def make_keyboard(char_id, show_relics=False):
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    btn_conf = types.InlineKeyboardButton("Configuration", callback_data=f"conf_{char_id}")
+    if show_relics:
+        btn_toggle = types.InlineKeyboardButton("⬅️ Gear Tiers", callback_data=f"show_gear_{char_id}")
+    else:
+        btn_toggle = types.InlineKeyboardButton("➡️ Relic Tiers", callback_data=f"show_relic_{char_id}")
+    markup.add(btn_conf, btn_toggle)
+    return markup
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.reply_to(message, "Write the unit name and tier number (if needed), and I will give you information about its gear.")
+    bot.reply_to(message, "Write the unit name and tier/relic (e.g. Leia 12 or Leia R7).")
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-    text = message.text.strip()
+    text = message.text.strip().upper()
     parts = text.split()
     
-    tier_requested = None
-    if len(parts) > 1 and parts[-1].isdigit():
-        tier_requested = int(parts[-1])
-        search_query = " ".join(parts[:-1])
-    else:
-        search_query = text
+    tier_val, is_relic = None, False
+    if len(parts) > 1:
+        last = parts[-1]
+        if last.startswith('R') and last[1:].isdigit():
+            tier_val, is_relic, search_query = int(last[1:]), True, " ".join(parts[:-1])
+        elif last.isdigit():
+            tier_val, is_relic, search_query = int(last), False, " ".join(parts[:-1])
+        else: search_query = text
+    else: search_query = text
 
     best_match, score = process.extractOne(search_query, char_names)
-    
     if score > 60:
         char = next(c for c in chars_data if c['name'] == best_match)
-        role = char.get('description', 'Unit').split(',')[0]
-        emoji, side = get_side_info(char.get('alignment'))
+        header = get_char_header(char)
         
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("Configuration", callback_data=f"c_{char['base_id']}"))
-
-        header = f"**{char['name']}**\n__{role}, {emoji} {side}__\n\n"
-
-        if tier_requested:
-            t_idx = max(1, min(tier_requested, len(char['gear_levels']))) - 1
-            g_list = "\n".join([f"— {gear_dict.get(g, g)}" for g in char['gear_levels'][t_idx]['gear']])
-            caption = f"{header}**Tier {t_idx + 1}**\n<blockquote>\n{g_list}\n</blockquote>"
-            bot.send_photo(message.chat.id, char['image'], caption=caption, parse_mode="HTML", reply_markup=markup)
-        else:
-            full_gear_text = header
-            for i in range(len(char['gear_levels'])):
-                g_list = "\n".join([f"— {gear_dict.get(g, g)}" for g in char['gear_levels'][i]['gear']])
-                full_gear_text += f"**Tier {i+1}**\n<blockquote>\n{g_list}\n</blockquote>\n"
-            
-            # Если текст влезает в лимит подписи к фото (1024), шлем вместе
-            if len(full_gear_text) <= 1024:
-                bot.send_photo(message.chat.id, char['image'], caption=full_gear_text, parse_mode="HTML", reply_markup=markup)
+        if is_relic or tier_val:
+            if is_relic:
+                r_lvl = str(min(max(tier_val, 0), 10))
+                req = relic_reqs.get(r_lvl, {})
+                items = "\n".join([f"— {k}: {v}" for k, v in req.items()]) if req else "No additional resources (Base G13)"
+                res = f"{header}\n\n**Relic Tier {r_lvl}**\n<blockquote>\n{items}\n</blockquote>"
             else:
-                # Если слишком длинно, шлем фото с заголовком, а следом — весь список
+                t_idx = min(max(tier_val, 1), len(char['gear_levels'])) - 1
+                items = "\n".join([f"— {gear_dict.get(g, g)}" for g in char['gear_levels'][t_idx]['gear']])
+                res = f"{header}\n\n**Tier {t_idx + 1}**\n<blockquote>\n{items}\n</blockquote>"
+            bot.send_photo(message.chat.id, char['image'], caption=res, parse_mode="HTML", reply_markup=make_keyboard(char['base_id'], is_relic))
+        else:
+            # Сводка всех тиров
+            full_text = header + "\n\n"
+            for i, level in enumerate(char['gear_levels']):
+                items = "\n".join([f"— {gear_dict.get(g, g)}" for g in level['gear']])
+                full_text += f"**Tier {i+1}**\n<blockquote>\n{items}\n</blockquote>\n"
+            
+            if len(full_text) <= 1024:
+                bot.send_photo(message.chat.id, char['image'], caption=full_text, parse_mode="HTML", reply_markup=make_keyboard(char['base_id']))
+            else:
                 bot.send_photo(message.chat.id, char['image'], caption=header, parse_mode="HTML")
-                # Telegram не даст отправить больше 4096 в одном сообщении, на всякий случай дробим
-                if len(full_gear_text) > 4000:
-                    for x in range(0, len(full_gear_text), 4000):
-                        bot.send_message(message.chat.id, full_gear_text[x:x+4000], parse_mode="HTML")
-                else:
-                    bot.send_message(message.chat.id, full_gear_text, parse_mode="HTML", reply_markup=markup)
+                bot.send_message(message.chat.id, full_text, parse_mode="HTML", reply_markup=make_keyboard(char['base_id']))
     else:
         bot.reply_to(message, "Unit not found.")
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    action, char_id = call.data.split('_', 1)
+    char = next((c for c in chars_data if c['base_id'] == char_id), None)
+    if not char: return
+
+    header = get_char_header(char)
+    if action == "show_relic":
+        res = f"{header}\n\n**Relic Tiers (0-10)**\n"
+        for r, items in relic_reqs.items():
+            content = ", ".join([f"{k} x{v}" for k, v in items.items()]) if items else "Base status"
+            res += f"**R{r}**: {content}\n\n"
+        bot.edit_message_caption(res, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=make_keyboard(char_id, True))
+    
+    elif action == "show_gear":
+        # Возвращаем краткую сводку или последний тир
+        res = f"{header}\n\n**Gear Tiers 1-12**\n(Send unit name to see full list)"
+        bot.edit_message_caption(res, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=make_keyboard(char_id, False))
 
 app = Flask('')
 @app.route('/')
