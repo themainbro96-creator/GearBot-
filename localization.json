@@ -1,13 +1,13 @@
 {
   "en": {
     "buttons": {
-      "gear_tiers": "⬅️ Gear Tiers",
-      "relic_tiers": "➡️ Relic Tiers",
+      "gear_tiers": "⬅️ Gear",
+      "relic_tiers": "➡️ Relic",
       "configuration": "Configuration"
     },
     "phrases": {
       "welcome_choose_lang": "sup, {name}! Choose the language",
-      "lang_set_msg": "Great! You can change the language in _settings_ later\n\nWrite the unit name and tier number (if needed), and I will give you information about its gear.",
+      "lang_set_msg": "Great! You can change the language in <i>settings</i> later\n\nWrite the unit name and tier number (if needed), and I will give you information about its gear.",
       "unit_not_found": "Unit not found. Please try again.",
       "relic_reqs": "Relic Requirements (0-10):",
       "relic_tier": "Relic Tier",
@@ -15,6 +15,7 @@
       "tier": "Tier"
     },
     "relic_materials": {
+      "Credits": "Credits",
       "Carbonite Circuit Board": "Carbonite Circuit Board",
       "Bronzium Wiring": "Bronzium Wiring",
       "Chromium Transistor": "Chromium Transistor",
@@ -22,20 +23,26 @@
       "Electrium Conductor": "Electrium Conductor",
       "Zinbiddle Actuator": "Zinbiddle Actuator",
       "Impulse Detector": "Impulse Detector",
-      "Gyroscope": "Gyrda Keypad",
+      "Aeromagnifier": "Aeromagnifier",
+      "Gyrda Keypad": "Gyrda Keypad",
       "Droid Brain": "Droid Brain",
       "Fragmented Signal Data": "Fragmented Signal Data",
       "Incomplete Signal Data": "Incomplete Signal Data",
       "Flawed Signal Data": "Flawed Signal Data"
     },
     "gear_materials": {
-      "Mk 8 Nubian Security Scanner": "Mk 8 Nubian Security Scanner"
+      "Mk 8 Nubian Security Scanner": "Mk 8 Nubian Security Scanner",
+      "Mk 3 CEC Fusion Furnace": "Mk 3 CEC Fusion Furnace",
+      "Mk 5 Arakyd Droid Caller": "Mk 5 Arakyd Droid Caller",
+      "Mk 7 Merr-Sonn Thermal Detonator": "Mk 7 Merr-Sonn Thermal Detonator",
+      "Mk 3 Czerka Stun Cuffs": "Mk 3 Czerka Stun Cuffs",
+      "Mk 5 A/KT Stun Gun": "Mk 5 A/KT Stun Gun"
     }
   },
   "ru": {
     "buttons": {
-      "gear_tiers": "⬅️ Уровни снаряжения",
-      "relic_tiers": "➡️ Уровни реликвии",
+      "gear_tiers": "⬅️ Гир",
+      "relic_tiers": "➡️ Релик",
       "configuration": "Конфигурация"
     },
     "phrases": {
@@ -48,18 +55,20 @@
       "tier": "Тир"
     },
     "relic_materials": {
-      "Carbonite Circuit Board": "Карбонитовая микросхема",
-      "Bronzium Wiring": "Бронзиумовая проводка",
-      "Chromium Transistor": "Хромиумовый транзистор",
-      "Aurodium Heat Sink": "Ауродиевый радиатор",
-      "Electrium Conductor": "Электриумовый проводник",
-      "Zinbiddle Actuator": "Зинбиддлевый привод",
-      "Impulse Detector": "Детектор импульсов",
-      "Gyroscope": "Клавиатура гирда",
-      "Droid Brain": "Мозг дроида",
-      "Fragmented Signal Data": "Фрагментированные данные сигнала",
-      "Incomplete Signal Data": "Неполные данные сигнала",
-      "Flawed Signal Data": "Искаженные данные сигнала"
+      "Credits": "Кредиты",
+      "Carbonite Circuit Board": "Карбонитовые электроплаты",
+      "Bronzium Wiring": "Бронзиумные провода",
+      "Chromium Transistor": "Хромовые транзисторы",
+      "Aurodium Heat Sink": "Ауродиумные радиаторы",
+      "Electrium Conductor": "Электриумные проводники",
+      "Zinbiddle Actuator": "Карты для зинбиддла",
+      "Impulse Detector": "Детекторы импульсов",
+      "Aeromagnifier": "Аэроувеличители",
+      "Gyrda Keypad": "Кнопочные панели «Гидра»",
+      "Droid Brain": "«Мозги» дроида",
+      "Fragmented Signal Data": "«Серые» сигналы",
+      "Incomplete Signal Data": "«Зелёные» сигналы",
+      "Flawed Signal Data": "«Синие» сигналы"
     },
     "gear_materials": {
       "Mk 8 Nubian Security Scanner": "Сканер системы безопасности «Нубиан» Мк 8",
@@ -76,13 +85,7 @@
       "Mk 12 ArmaTek Bayonet": "Штык-нож «АрмаТек» Мк 12",
       "Mk 12 ArmaTek Visor": "Визор «АрмаТек» Мк 12",
       "Mk 12 ArmaTek Wrist Band": "Браслет «АрмаТек» Мк 12",
-      "Mk 12 ArmaTek Tactical Data": "Тактические данные «АрмаТек» Мк 12",
-      "Mk 6 Carbanti Sensor Array": "Сенсорная панель «Карбанти» Мк 6",
-      "Mk 5 Arakyd Droid Caller Prototype": "Прототип контроллера дроидов «Аракид» Мк 5",
-      "Mk 4 Sienar Holo Projector": "Голопроектор «Сиенар» Мк 4",
-      "Power Cell Injector (Ionic)": "Инжектор энергоячеек (ионный)",
-      "Power Cell Injector (Plasma)": "Инжектор энергоячеек (плазменный)",
-      "Power Cell Injector (Fusion)": "Инжектор энергоячеек (синтез)"
+      "Mk 12 ArmaTek Tactical Data": "Тактические данные «АрмаТек» Мк 12"
     }
   }
 }
