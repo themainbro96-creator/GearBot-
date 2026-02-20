@@ -11,26 +11,21 @@ TOKEN = os.environ.get('TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
 def load_data():
-    # Загрузка и распаковка JSON (учитывая структуру {"text": "[...]"})
     with open('Swgoh_Characters.json', 'r', encoding='utf-8') as f:
         data = json.load(f)
         chars = json.loads(data['text'])
-    
     with open('Swgoh_Gear.json', 'r', encoding='utf-8') as f:
         data = json.load(f)
         gear = json.loads(data['text'])
-        
     return chars, gear
 
 chars_data, gear_data = load_data()
-# Словарь для быстрого поиска названий снаряжения
 gear_dict = {item['base_id']: item['name'] for item in gear_data}
-# Список имен для поиска совпадений
 char_names = [c['name'] for c in chars_data]
 
-def get_char_info(char):
+def get_char_details(char):
     desc = char.get('description', '').lower()
-    # Определяем сторону по описанию (в SWGOH API это обычно там)
+    # Проверка стороны
     if "dark side" in desc:
         emoji, side = "🔴", "Dark Side"
     elif "light side" in desc:
@@ -38,14 +33,20 @@ def get_char_info(char):
     else:
         emoji, side = "⚪️", "Neutral"
     
-    # Роль (обычно первое слово в описании или можно вытащить из данных)
+    # Определение роли
     role = "Unit"
-    if "attacker" in desc: role = "Attacker"
-    elif "support" in desc: role = "Support"
-    elif "tank" in desc: role = "Tank"
-    elif "healer" in desc: role = "Healer"
-    
+    roles = ["Attacker", "Support", "Tank", "Healer", "Leader"]
+    for r in roles:
+        if r.lower() in desc:
+            role = r
+            break
+            
     return role, emoji, side
+
+def format_gear_list(char, tier_idx):
+    gear_ids = char['gear_levels'][tier_idx]['gear']
+    items = [gear_dict.get(g_id, f"Unknown ({g_id})") for g_id in gear_ids]
+    return " — " + "\n — ".join(items)
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -54,73 +55,58 @@ def start(message):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     text = message.text.strip()
-    
-    # Логика: отделяем имя от номера тира (например, "Fennec 8")
     parts = text.split()
-    tier = 1 # по умолчанию 1 тир
+    
+    tier_requested = None
     search_query = text
 
+    # Проверяем, указан ли тир в конце
     if len(parts) > 1 and parts[-1].isdigit():
-        tier = int(parts[-1])
+        tier_requested = int(parts[-1])
         search_query = " ".join(parts[:-1])
     
-    # Поиск самого похожего имени
     best_match, score = process.extractOne(search_query, char_names)
     
-    if score > 60: # Если совпадение больше 60%
+    if score > 60:
         char = next(c for c in chars_data if c['name'] == best_match)
+        role, side_emoji, side_name = get_char_details(char)
+        header = f"<b>{char['name']}</b>\n<i>{role}, {side_emoji} {side_name}</i>\n\n"
         
-        # Ограничиваем тир от 1 до 13
-        tier = max(1, min(tier, 13))
-        gear_ids = char['gear_levels'][tier-1]['gear']
-        
-        role, side_emoji, side_name = get_char_info(char)
-        
-        # Собираем список снаряжения
-        gear_list_str = ""
-        for g_id in gear_ids:
-            name = gear_dict.get(g_id, f"Unknown Gear ({g_id})")
-            gear_list_str += f"— {name}\n"
-
-        # Формируем HTML сообщение (blockquote работает только в HTML)
-        caption = (
-            f"<b>{char['name']}</b>\n"
-            f"<i>{role}, {side_emoji} {side_name}</i>\n\n"
-            f"<blockquote>"
-            f"{gear_list_str.strip()}"
-            f"</blockquote>"
-        )
-
-        # Кнопка
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("Configuration", callback_data=f"conf_{char['base_id']}"))
 
-        # Отправка фото с описанием
+        if tier_requested:
+            # Одиночный тир
+            t_idx = max(1, min(tier_requested, 13)) - 1
+            gear_list = format_gear_list(char, t_idx)
+            full_message = f"{header}<b>Tier {t_idx + 1}</b>\n<blockquote>{gear_list}</blockquote>"
+        else:
+            # Полная сводка (все 13 тиров)
+            full_message = f"{header}<b>Full Gear Summary (Tier 1-13):</b>\n"
+            for i in range(13):
+                items = [gear_dict.get(g_id, "???") for g_id in char['gear_levels'][i]['gear']]
+                # В полной сводке пишем в одну строку для компактности
+                full_message += f"<b>T{i+1}:</b> {', '.join(items)}\n\n"
+
         try:
-            bot.send_photo(
-                message.chat.id,
-                char['image'],
-                caption=caption,
-                parse_mode="HTML",
-                reply_markup=markup
-            )
+            # Если сообщение слишком длинное (больше 1024 символов для caption), 
+            # отправляем картинку отдельно, а текст отдельно.
+            if len(full_message) > 1000:
+                bot.send_photo(message.chat.id, char['image'])
+                bot.send_message(message.chat.id, full_message, parse_mode="HTML", reply_markup=markup)
+            else:
+                bot.send_photo(message.chat.id, char['image'], caption=full_message, parse_mode="HTML", reply_markup=markup)
         except Exception as e:
-            bot.reply_to(message, f"Ошибка при отправке данных: {e}")
+            bot.reply_to(message, "Произошла ошибка при выводе данных. Возможно, персонаж слишком сложный!")
     else:
-        bot.reply_to(message, "Юнит не найден. Попробуй написать точнее (на английском).")
+        bot.reply_to(message, "Юнит не найден. Попробуй еще раз.")
 
-# --- Секция для Render (Keep Alive) ---
+# --- Render Keep-Alive ---
 server = Flask('')
-
 @server.route('/')
-def home():
-    return "Bot is running"
-
-def run():
-    server.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+def home(): return "OK"
+def run(): server.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
 if __name__ == "__main__":
-    # Запускаем фласк в отдельном потоке
     Thread(target=run).start()
-    print("Бот запущен...")
     bot.infinity_polling()
