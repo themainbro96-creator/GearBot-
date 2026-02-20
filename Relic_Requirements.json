@@ -1,0 +1,13 @@
+{
+  "0": {},
+  "1": {"Carbonite Circuit Board": 0, "Bronzium Wiring": 0, "Chromium Transistor": 0, "Fragmented Signal Data": 0},
+  "2": {"Carbonite Circuit Board": 40, "Fragmented Signal Data": 15},
+  "3": {"Carbonite Circuit Board": 30, "Bronzium Wiring": 40, "Fragmented Signal Data": 20, "Incomplete Signal Data": 15},
+  "4": {"Carbonite Circuit Board": 30, "Bronzium Wiring": 40, "Chromium Transistor": 20, "Fragmented Signal Data": 20, "Incomplete Signal Data": 25},
+  "5": {"Carbonite Circuit Board": 30, "Bronzium Wiring": 40, "Chromium Transistor": 30, "Aurodium Heat Sink": 20, "Fragmented Signal Data": 20, "Incomplete Signal Data": 25, "Flawed Signal Data": 15},
+  "6": {"Carbonite Circuit Board": 20, "Bronzium Wiring": 30, "Chromium Transistor": 30, "Aurodium Heat Sink": 20, "Electrium Conductor": 20, "Fragmented Signal Data": 20, "Incomplete Signal Data": 25, "Flawed Signal Data": 25},
+  "7": {"Carbonite Circuit Board": 20, "Bronzium Wiring": 30, "Chromium Transistor": 30, "Aurodium Heat Sink": 20, "Electrium Conductor": 20, "Zinbiddle Actuator": 10, "Fragmented Signal Data": 20, "Incomplete Signal Data": 25, "Flawed Signal Data": 35},
+  "8": {"Carbonite Circuit Board": 20, "Bronzium Wiring": 30, "Chromium Transistor": 30, "Aurodium Heat Sink": 20, "Electrium Conductor": 20, "Zinbiddle Actuator": 20, "Impulse Detector": 20, "Fragmented Signal Data": 20, "Incomplete Signal Data": 25, "Flawed Signal Data": 45},
+  "9": {"Carbonite Circuit Board": 20, "Bronzium Wiring": 30, "Chromium Transistor": 30, "Aurodium Heat Sink": 20, "Electrium Conductor": 20, "Zinbiddle Actuator": 20, "Impulse Detector": 20, "Gyroscope": 20, "Fragmented Signal Data": 30, "Incomplete Signal Data": 30, "Flawed Signal Data": 55},
+  "10": {"Carbonite Circuit Board": 30, "Bronzium Wiring": 40, "Chromium Transistor": 40, "Aurodium Heat Sink": 30, "Electrium Conductor": 30, "Zinbiddle Actuator": 30, "Impulse Detector": 30, "Gyroscope": 30, "Droid Brain": 30, "Fragmented Signal Data": 40, "Incomplete Signal Data": 40, "Flawed Signal Data": 70}
+}
