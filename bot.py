@@ -33,7 +33,7 @@ def format_gear_text(char):
     text = f"**{char['name']}**\n__{role}__\n\n"
     for i, level in enumerate(char['gear_levels']):
         items = "\n".join([f"— {gear_dict.get(g, g)}" for g in level['gear']])
-        text += f"**Tier {i+1}**\n<blockquote>{items}</blockquote>\n"
+        text += f"**Tier {i+1}**\n{items}\n\n"
     return text
 
 def format_relic_text(char):
@@ -42,10 +42,10 @@ def format_relic_text(char):
     text += "**Relic Requirements (0-10):**\n\n"
     for r, reqs in relic_reqs.items():
         if not reqs:
-            text += f"**Relic Tier {r}**\n<blockquote>Base G13 Status</blockquote>\n"
+            text += f"**Relic Tier {r}**\nBase G13 Status\n\n"
         else:
             items = "\n".join([f"— {k}: {v}" for k, v in reqs.items()])
-            text += f"**Relic Tier {r}**\n<blockquote>{items}</blockquote>\n"
+            text += f"**Relic Tier {r}**\n{items}\n\n"
     return text
 
 def make_keyboard(char_id, current_view="gear"):
@@ -64,8 +64,8 @@ def start(message):
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-    text = message.text.strip().upper()
-    parts = text.split()
+    msg_text = message.text.strip().upper()
+    parts = msg_text.split()
     
     tier_val, is_relic = None, False
     if len(parts) > 1:
@@ -74,8 +74,8 @@ def handle_message(message):
             tier_val, is_relic, search_query = int(last[1:]), True, " ".join(parts[:-1])
         elif last.isdigit():
             tier_val, is_relic, search_query = int(last), False, " ".join(parts[:-1])
-        else: search_query = text
-    else: search_query = text
+        else: search_query = msg_text
+    else: search_query = msg_text
 
     best_match, score = process.extractOne(search_query, char_names)
     if score > 60:
@@ -88,15 +88,20 @@ def handle_message(message):
                 r_lvl = str(min(max(tier_val, 0), 10))
                 req = relic_reqs.get(r_lvl, {})
                 items = "\n".join([f"— {k}: {v}" for k, v in req.items()]) if req else "Base G13 Status"
-                caption = f"{header}**Relic Tier {r_lvl}**\n<blockquote>{items}</blockquote>"
+                caption = f"{header}**Relic Tier {r_lvl}**\n{items}"
             else:
                 t_idx = min(max(tier_val, 1), len(char['gear_levels'])) - 1
                 g_list = "\n".join([f"— {gear_dict.get(g, g)}" for g in char['gear_levels'][t_idx]['gear']])
-                caption = f"{header}**Tier {t_idx + 1}**\n<blockquote>{g_list}</blockquote>"
-            bot.send_photo(message.chat.id, char['image'], caption=caption, parse_mode="HTML", reply_markup=make_keyboard(char['base_id'], "relic" if is_relic else "gear"))
+                caption = f"{header}**Tier {t_idx + 1}**\n{g_list}"
         else:
             caption = format_gear_text(char)
-            bot.send_photo(message.chat.id, char['image'], caption=caption, parse_mode="HTML", reply_markup=make_keyboard(char['base_id'], "gear"))
+
+        # Логика отправки: если текст > 1024, шлем картинку отдельно
+        if len(caption) > 1024:
+            bot.send_photo(message.chat.id, char['image'])
+            bot.send_message(message.chat.id, caption, parse_mode="Markdown", reply_markup=make_keyboard(char['base_id'], "relic" if is_relic else "gear"))
+        else:
+            bot.send_photo(message.chat.id, char['image'], caption=caption, parse_mode="Markdown", reply_markup=make_keyboard(char['base_id'], "relic" if is_relic else "gear"))
     else:
         bot.reply_to(message, "Unit not found. Please try again.")
 
@@ -109,20 +114,27 @@ def callback_query(call):
     if not char: return
 
     if action == "relic":
-        new_caption = format_relic_text(char)
+        new_text = format_relic_text(char)
         new_markup = make_keyboard(char_id, "relic")
     elif action == "gear":
-        new_caption = format_gear_text(char)
+        new_text = format_gear_text(char)
         new_markup = make_keyboard(char_id, "gear")
     else: return
 
-    bot.edit_message_caption(
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        caption=new_caption,
-        parse_mode="HTML",
-        reply_markup=new_markup
-    )
+    try:
+        # Пытаемся редактировать подпись, если сообщение с фото
+        if call.message.photo:
+            if len(new_text) > 1024:
+                # Если при переключении текст стал слишком длинным для фото
+                bot.answer_callback_query(call.id, "Text too long for photo caption. Sending as message.")
+                bot.send_message(call.message.chat.id, new_text, parse_mode="Markdown", reply_markup=new_markup)
+            else:
+                bot.edit_message_caption(chat_id=call.message.chat.id, message_id=call.message.message_id, caption=new_text, parse_mode="Markdown", reply_markup=new_markup)
+        else:
+            # Если это уже текстовое сообщение
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=new_text, parse_mode="Markdown", reply_markup=new_markup)
+    except Exception:
+        pass
 
 app = Flask('')
 @app.route('/')
