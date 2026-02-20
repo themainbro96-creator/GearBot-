@@ -5,9 +5,13 @@ from flask import Flask
 from threading import Thread
 from telebot import types
 from fuzzywuzzy import process
+from deep_translator import GoogleTranslator
 
 TOKEN = os.environ.get('TOKEN')
 bot = telebot.TeleBot(TOKEN)
+
+# Инициализируем переводчик
+translator = GoogleTranslator(source='en', target='ru')
 
 def load_data():
     with open('Swgoh_Characters.json', 'r', encoding='utf-8') as f:
@@ -28,24 +32,34 @@ char_names = [c['name'] for c in chars_data]
 def get_char_by_id(char_id):
     return next((c for c in chars_data if c['base_id'] == char_id), None)
 
+def get_translated_description(desc):
+    try:
+        # Переводим описание персонажа
+        return translator.translate(desc)
+    except:
+        return desc # Если ошибка сети, возвращаем оригинал
+
 def format_gear_text(char):
-    role = char.get('description', 'Unit').split(',')[0]
-    text = f"**{char['name']}**\n__{role}__\n\n"
+    # Имя жирным, Описание курсивом (с переводом)
+    desc_ru = get_translated_description(char.get('description', 'Unit'))
+    text = f"*{char['name']}*\n_{desc_ru}_\n\n"
+    
     for i, level in enumerate(char['gear_levels']):
         items = "\n".join([f"— {gear_dict.get(g, g)}" for g in level['gear']])
-        text += f"**Tier {i+1}**\n{items}\n\n"
+        text += f"*Tier {i+1}*\n{items}\n\n"
     return text
 
 def format_relic_text(char):
-    role = char.get('description', 'Unit').split(',')[0]
-    text = f"**{char['name']}**\n__{role}__\n\n"
-    text += "**Relic Requirements (0-10):**\n\n"
+    desc_ru = get_translated_description(char.get('description', 'Unit'))
+    text = f"*{char['name']}*\n_{desc_ru}_\n\n"
+    text += "*Relic Requirements (0-10):*\n\n"
+    
     for r, reqs in relic_reqs.items():
         if not reqs:
-            text += f"**Relic Tier {r}**\nBase G13 Status\n\n"
+            text += f"*Relic Tier {r}*\nBase G13 Status\n\n"
         else:
             items = "\n".join([f"— {k}: {v}" for k, v in reqs.items()])
-            text += f"**Relic Tier {r}**\n{items}\n\n"
+            text += f"*Relic Tier {r}*\n{items}\n\n"
     return text
 
 def make_keyboard(char_id, current_view="gear"):
@@ -82,21 +96,21 @@ def handle_message(message):
         char = get_char_by_id(next(c['base_id'] for c in chars_data if c['name'] == best_match))
         
         if is_relic or tier_val:
-            role = char.get('description', 'Unit').split(',')[0]
-            header = f"**{char['name']}**\n__{role}__\n\n"
+            desc_ru = get_translated_description(char.get('description', 'Unit'))
+            header = f"*{char['name']}*\n_{desc_ru}_\n\n"
             if is_relic:
                 r_lvl = str(min(max(tier_val, 0), 10))
                 req = relic_reqs.get(r_lvl, {})
                 items = "\n".join([f"— {k}: {v}" for k, v in req.items()]) if req else "Base G13 Status"
-                caption = f"{header}**Relic Tier {r_lvl}**\n{items}"
+                caption = f"{header}*Relic Tier {r_lvl}*\n{items}"
             else:
                 t_idx = min(max(tier_val, 1), len(char['gear_levels'])) - 1
                 g_list = "\n".join([f"— {gear_dict.get(g, g)}" for g in char['gear_levels'][t_idx]['gear']])
-                caption = f"{header}**Tier {t_idx + 1}**\n{g_list}"
+                caption = f"{header}*Tier {t_idx + 1}*\n{g_list}"
         else:
             caption = format_gear_text(char)
 
-        # Логика отправки: если текст > 1024, шлем картинку отдельно
+        # Если текст > 1024, шлем картинку отдельно, текст вторым сообщением
         if len(caption) > 1024:
             bot.send_photo(message.chat.id, char['image'])
             bot.send_message(message.chat.id, caption, parse_mode="Markdown", reply_markup=make_keyboard(char['base_id'], "relic" if is_relic else "gear"))
@@ -108,8 +122,7 @@ def handle_message(message):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     data = call.data.split('_')
-    action = data[0]
-    char_id = "_".join(data[1:])
+    action, char_id = data[0], "_".join(data[1:])
     char = get_char_by_id(char_id)
     if not char: return
 
@@ -122,18 +135,15 @@ def callback_query(call):
     else: return
 
     try:
-        # Пытаемся редактировать подпись, если сообщение с фото
         if call.message.photo:
             if len(new_text) > 1024:
-                # Если при переключении текст стал слишком длинным для фото
-                bot.answer_callback_query(call.id, "Text too long for photo caption. Sending as message.")
+                bot.answer_callback_query(call.id, "Text too long for photo. Sending separately.")
                 bot.send_message(call.message.chat.id, new_text, parse_mode="Markdown", reply_markup=new_markup)
             else:
                 bot.edit_message_caption(chat_id=call.message.chat.id, message_id=call.message.message_id, caption=new_text, parse_mode="Markdown", reply_markup=new_markup)
         else:
-            # Если это уже текстовое сообщение
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=new_text, parse_mode="Markdown", reply_markup=new_markup)
-    except Exception:
+    except:
         pass
 
 app = Flask('')
