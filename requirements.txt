@@ -2,3 +2,4 @@ pyTelegramBotAPI
 flask
 fuzzywuzzy
 python-Levenshtein
+deep-translator
