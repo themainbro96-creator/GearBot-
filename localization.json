@@ -1,0 +1,88 @@
+{
+  "en": {
+    "buttons": {
+      "gear_tiers": "⬅️ Gear Tiers",
+      "relic_tiers": "➡️ Relic Tiers",
+      "configuration": "Configuration"
+    },
+    "phrases": {
+      "welcome_choose_lang": "sup, {name}! Choose the language",
+      "lang_set_msg": "Great! You can change the language in _settings_ later\n\nWrite the unit name and tier number (if needed), and I will give you information about its gear.",
+      "unit_not_found": "Unit not found. Please try again.",
+      "relic_reqs": "Relic Requirements (0-10):",
+      "relic_tier": "Relic Tier",
+      "base_g13": "Base G13 Status",
+      "tier": "Tier"
+    },
+    "relic_materials": {
+      "Carbonite Circuit Board": "Carbonite Circuit Board",
+      "Bronzium Wiring": "Bronzium Wiring",
+      "Chromium Transistor": "Chromium Transistor",
+      "Aurodium Heat Sink": "Aurodium Heat Sink",
+      "Electrium Conductor": "Electrium Conductor",
+      "Zinbiddle Actuator": "Zinbiddle Actuator",
+      "Impulse Detector": "Impulse Detector",
+      "Gyroscope": "Gyrda Keypad",
+      "Droid Brain": "Droid Brain",
+      "Fragmented Signal Data": "Fragmented Signal Data",
+      "Incomplete Signal Data": "Incomplete Signal Data",
+      "Flawed Signal Data": "Flawed Signal Data"
+    },
+    "gear_materials": {
+      "Mk 8 Nubian Security Scanner": "Mk 8 Nubian Security Scanner"
+    }
+  },
+  "ru": {
+    "buttons": {
+      "gear_tiers": "⬅️ Уровни снаряжения",
+      "relic_tiers": "➡️ Уровни реликвии",
+      "configuration": "Конфигурация"
+    },
+    "phrases": {
+      "welcome_choose_lang": "sup, {name}! Выбери язык",
+      "lang_set_msg": "Супер! Ты сможешь поменять язык в настройках когда захочешь\n\nнапиши имя юнита и номер тира (при необходимости), а я выдам тебе информацию о его снаряжении",
+      "unit_not_found": "Юнит не найден. Пожалуйста, попробуй еще раз.",
+      "relic_reqs": "Требования для реликвии (0-10):",
+      "relic_tier": "Уровень реликвии",
+      "base_g13": "Базовый статус (G13)",
+      "tier": "Тир"
+    },
+    "relic_materials": {
+      "Carbonite Circuit Board": "Карбонитовая микросхема",
+      "Bronzium Wiring": "Бронзиумовая проводка",
+      "Chromium Transistor": "Хромиумовый транзистор",
+      "Aurodium Heat Sink": "Ауродиевый радиатор",
+      "Electrium Conductor": "Электриумовый проводник",
+      "Zinbiddle Actuator": "Зинбиддлевый привод",
+      "Impulse Detector": "Детектор импульсов",
+      "Gyroscope": "Клавиатура гирда",
+      "Droid Brain": "Мозг дроида",
+      "Fragmented Signal Data": "Фрагментированные данные сигнала",
+      "Incomplete Signal Data": "Неполные данные сигнала",
+      "Flawed Signal Data": "Искаженные данные сигнала"
+    },
+    "gear_materials": {
+      "Mk 8 Nubian Security Scanner": "Сканер системы безопасности «Нубиан» Мк 8",
+      "Mk 3 CEC Fusion Furnace": "Печь синтеза от CEC Мк 3",
+      "Mk 5 Arakyd Droid Caller": "Контроллер дроидов «Аракид» Мк 5",
+      "Mk 7 Merr-Sonn Thermal Detonator": "Термальный детонатор «Мерр-Сонн» Мк 7",
+      "Mk 3 Czerka Stun Cuffs": "Шокерные наручники «Цзерка» Мк 3",
+      "Mk 5 A/KT Stun Gun": "Электрошокер A/KT Мк 5",
+      "Mk 12 ArmaTek Stun Gun": "Электрошокер «АрмаТек» Мк 12",
+      "Mk 12 ArmaTek Armor": "Броня «АрмаТек» Мк 12",
+      "Mk 12 ArmaTek Medpac": "Медпакет «АрмаТек» Мк 12",
+      "Mk 12 ArmaTek Cybernetics": "Кибернетика «АрмаТек» Мк 12",
+      "Mk 12 ArmaTek Multi-tool": "Мультиинструмент «АрмаТек» Мк 12",
+      "Mk 12 ArmaTek Bayonet": "Штык-нож «АрмаТек» Мк 12",
+      "Mk 12 ArmaTek Visor": "Визор «АрмаТек» Мк 12",
+      "Mk 12 ArmaTek Wrist Band": "Браслет «АрмаТек» Мк 12",
+      "Mk 12 ArmaTek Tactical Data": "Тактические данные «АрмаТек» Мк 12",
+      "Mk 6 Carbanti Sensor Array": "Сенсорная панель «Карбанти» Мк 6",
+      "Mk 5 Arakyd Droid Caller Prototype": "Прототип контроллера дроидов «Аракид» Мк 5",
+      "Mk 4 Sienar Holo Projector": "Голопроектор «Сиенар» Мк 4",
+      "Power Cell Injector (Ionic)": "Инжектор энергоячеек (ионный)",
+      "Power Cell Injector (Plasma)": "Инжектор энергоячеек (плазменный)",
+      "Power Cell Injector (Fusion)": "Инжектор энергоячеек (синтез)"
+    }
+  }
+}
