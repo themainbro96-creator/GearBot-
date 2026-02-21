@@ -1,32 +1,40 @@
 import telebot
 import json
 import os
+import re
+import time
 from flask import Flask
 from threading import Thread
 from telebot import types
 from fuzzywuzzy import process
 from deep_translator import GoogleTranslator
 
+# Инициализация
 TOKEN = os.environ.get('TOKEN')
 bot = telebot.TeleBot(TOKEN)
 translator = GoogleTranslator(source='en', target='ru')
+start_time = time.time()
+VERSION = "2.1.0 (No-Relic Edition)"
 
-LANGUAGES_FILE = 'user_languages.json'
+# Пути к файлам
+LANG_FILE = 'user_languages.json'
+CACHE_FILE = 'translation_cache.json'
 
-def load_user_languages():
-    if os.path.exists(LANGUAGES_FILE):
+def load_json(filename, default):
+    if os.path.exists(filename):
         try:
-            with open(LANGUAGES_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return {str(k): v for k, v in data.items()}
-        except: return {}
-    return {}
+            with open(filename, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except: return default
+    return default
 
-def save_user_languages(langs):
-    with open(LANGUAGES_FILE, 'w', encoding='utf-8') as f:
-        json.dump(langs, f, ensure_ascii=False)
+def save_json(filename, data):
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
-user_languages = load_user_languages()
+# Загрузка настроек и кэша
+user_languages = load_json(LANG_FILE, {})
+search_cache = load_json(CACHE_FILE, {})
 
 def load_data():
     with open('Swgoh_Characters.json', 'r', encoding='utf-8') as f:
@@ -34,83 +42,65 @@ def load_data():
     with open('Swgoh_Gear.json', 'r', encoding='utf-8') as f:
         gear = json.loads(json.load(f)['text'])
     try:
-        with open('Relic_Requirements.json', 'r', encoding='utf-8') as f:
-            relics = json.load(f)
-    except: relics = {}
-    try:
         with open('localization.json', 'r', encoding='utf-8') as f:
             loc_data = json.load(f)
     except: loc_data = {}
-    return chars, gear, relics, loc_data
+    return chars, gear, loc_data
 
-chars_data, gear_data, relic_reqs, loc = load_data()
+chars_data, gear_data, loc = load_data()
 gear_dict = {item['base_id']: item['name'] for item in gear_data}
 char_names = [c['name'] for c in chars_data]
 
-def get_char_by_id(char_id):
-    return next((c for c in chars_data if c['base_id'] == char_id), None)
+# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+
+def get_english_query(query):
+    """Переводит русский запрос в английский и кэширует его"""
+    query_clean = query.lower().strip()
+    if not re.search('[а-яА-Я]', query_clean):
+        return query_clean
+    
+    if query_clean in search_cache:
+        return search_cache[query_clean]
+    
+    try:
+        translated = GoogleTranslator(source='ru', target='en').translate(query_clean)
+        search_cache[query_clean] = translated
+        save_json(CACHE_FILE, search_cache)
+        return translated
+    except:
+        return query_clean
 
 def translate_item(text, lang, category):
     if lang == 'en': return text
-    # Проверка в локальном JSON (приоритет)
-    if text in loc['ru'].get(category, {}):
+    if text in loc.get('ru', {}).get(category, {}):
         return loc['ru'][category][text]
-    # Автоперевод для остального (гир и т.д.)
     try: return translator.translate(text)
     except: return text
 
 def format_gear_text(char, lang='en'):
-    # Имя жирным, Описание курсивом
     name = translate_item(char['name'], lang, 'characters')
     desc = translate_item(char.get('description', 'Unit'), lang, 'descriptions')
-    
     t_text = loc[lang]['phrases']['tier']
-    res = f"<b>{name}</b>\n<i>{desc}</i>\n\n"
     
+    res = f"<b>{name}</b>\n<i>{desc}</i>\n\n"
     for i, level in enumerate(char['gear_levels']):
         items = []
         for g_id in level['gear']:
             orig_name = gear_dict.get(g_id, g_id)
-            translated_name = translate_item(orig_name, lang, 'gear_materials')
-            items.append(f"— {translated_name}")
-        
+            trans_name = translate_item(orig_name, lang, 'gear_materials')
+            items.append(f"— {trans_name}")
         res += f"<b>{t_text} {i+1}</b>\n<blockquote>" + "\n".join(items) + "</blockquote>\n"
     return res
 
-def format_relic_text(char, lang='en'):
-    name = translate_item(char['name'], lang, 'characters')
-    desc = translate_item(char.get('description', 'Unit'), lang, 'descriptions')
-    
-    ph = loc[lang]['phrases']
-    res = f"<b>{name}</b>\n<i>{desc}</i>\n\n<b>{ph['relic_reqs']}</b>\n\n"
-    
-    for r, reqs in relic_reqs.items():
-        r_label = ph['relic_tier']
-        if not reqs:
-            res += f"<b>{r_label} {r}</b>\n<blockquote>{ph['base_g13']}</blockquote>\n"
-        else:
-            items_list = []
-            for m_name, count in reqs.items():
-                trans_m = translate_item(m_name, lang, 'relic_materials')
-                if m_name == "Credits":
-                    items_list.append(f"— {trans_m}: {count:,}")
-                else:
-                    items_list.append(f"— {trans_m}: {count}")
-            res += f"<b>{r_label} {r}</b>\n<blockquote>" + "\n".join(items_list) + "</blockquote>\n"
-    return res
-
-def make_kb(char_id, view="gear", lang='en'):
-    markup = types.InlineKeyboardMarkup(row_width=2)
+def make_kb(char_id, lang='en'):
+    markup = types.InlineKeyboardMarkup()
     btns = loc[lang]['buttons']
-    btn_conf = types.InlineKeyboardButton(btns['configuration'], callback_data=f"conf_{char_id}")
-    
-    if view == "gear":
-        toggle_btn = types.InlineKeyboardButton(btns['relic_tiers'], callback_data=f"relic_{char_id}")
-    else:
-        toggle_btn = types.InlineKeyboardButton(btns['gear_tiers'], callback_data=f"gear_{char_id}")
-    
-    markup.add(btn_conf, toggle_btn)
+    # Теперь кнопки только для конфига и обновления (можно добавить кнопку "Обновить")
+    btn_conf = types.InlineKeyboardButton(btns['configuration'], callback_data=f"conf_sys")
+    markup.add(btn_conf)
     return markup
+
+# --- ОБРАБОТЧИКИ КОМАНД ---
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -134,58 +124,50 @@ def settings(message):
     )
     bot.send_message(message.chat.id, text, reply_markup=markup)
 
+@bot.message_handler(commands=['config'])
+def config_cmd(message):
+    uptime = f"{int(time.time() - start_time)} sec"
+    lang = user_languages.get(str(message.chat.id), 'en')
+    info = (
+        f"🛠 <b>System Config</b>\n"
+        f"— Version: <code>{VERSION}</code>\n"
+        f"— Uptime: <code>{uptime}</code>\n"
+        f"— Cached Names: <code>{len(search_cache)}</code>\n"
+        f"— Language: <code>{lang.upper()}</code>\n"
+        f"— Database: <code>SWGOH Local JSON</code>"
+    )
+    bot.send_message(message.chat.id, info, parse_mode="HTML")
+
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     chat_id = str(message.chat.id)
     lang = user_languages.get(chat_id, 'en')
-    raw = message.text.strip().upper()
+    raw = message.text.strip()
     parts = raw.split()
-    tier_val, is_relic, query = None, False, raw
     
-    if len(parts) > 1:
-        last = parts[-1]
-        if last.startswith('R') and last[1:].isdigit():
-            tier_val, is_relic, query = int(last[1:]), True, " ".join(parts[:-1])
-        elif last.isdigit():
-            tier_val, is_relic, query = int(last), False, " ".join(parts[:-1])
+    tier_val, query = None, raw
+    if len(parts) > 1 and parts[-1].isdigit():
+        tier_val, query = int(parts[-1]), " ".join(parts[:-1])
 
-    best, score = process.extractOne(query, char_names)
+    # Умный поиск с учетом русского языка
+    query_eng = get_english_query(query)
+    best, score = process.extractOne(query_eng, char_names)
+    
     if score > 60:
         char = next(c for c in chars_data if c['name'] == best)
-        ph = loc[lang]['phrases']
         
-        if is_relic or tier_val:
-            name_d = translate_item(char['name'], lang, 'characters')
-            desc_d = translate_item(char.get('description', 'Unit'), lang, 'descriptions')
-            header = f"<b>{name_d}</b>\n<i>{desc_d}</i>\n\n"
-            
-            if is_relic:
-                r_lvl = str(min(max(tier_val, 0), 10))
-                req = relic_reqs.get(r_lvl, {})
-                if not req: 
-                    items_str = ph['base_g13']
-                else:
-                    items_list = []
-                    for k, v in req.items():
-                        trans_k = translate_item(k, lang, 'relic_materials')
-                        if k == "Credits":
-                            items_list.append(f"— {trans_k}: {v:,}")
-                        else:
-                            items_list.append(f"— {trans_k}: {v}")
-                    items_str = "\n".join(items_list)
-                caption = f"{header}<b>{ph['relic_tier']} {r_lvl}</b>\n<blockquote>{items_str}</blockquote>"
-            else:
-                t_idx = min(max(tier_val, 1), len(char['gear_levels'])) - 1
-                g_list = "\n".join([f"— {translate_item(gear_dict.get(g, g), lang, 'gear_materials')}" for g in char['gear_levels'][t_idx]['gear']])
-                caption = f"{header}<b>{ph['tier']} {t_idx + 1}</b>\n<blockquote>{g_list}</blockquote>"
+        if tier_val:
+            t_idx = min(max(tier_val, 1), len(char['gear_levels'])) - 1
+            g_list = "\n".join([f"— {translate_item(gear_dict.get(g, g), lang, 'gear_materials')}" for g in char['gear_levels'][t_idx]['gear']])
+            caption = f"<b>{char['name']}</b>\n<b>Tier {t_idx+1}</b>\n<blockquote>{g_list}</blockquote>"
         else:
             caption = format_gear_text(char, lang)
 
         if len(caption) > 1024:
             bot.send_photo(message.chat.id, char['image'])
-            bot.send_message(message.chat.id, caption, parse_mode="HTML", reply_markup=make_kb(char['base_id'], "relic" if is_relic else "gear", lang))
+            bot.send_message(message.chat.id, caption, parse_mode="HTML", reply_markup=make_kb(char['base_id'], lang))
         else:
-            bot.send_photo(message.chat.id, char['image'], caption=caption, parse_mode="HTML", reply_markup=make_kb(char['base_id'], "relic" if is_relic else "gear", lang))
+            bot.send_photo(message.chat.id, char['image'], caption=caption, parse_mode="HTML", reply_markup=make_kb(char['base_id'], lang))
     else:
         bot.reply_to(message, loc[lang]['phrases']['unit_not_found'])
 
@@ -196,27 +178,17 @@ def callback_query(call):
     if call.data.startswith("setlang_"):
         new_lang = call.data.split('_')[1]
         user_languages[chat_id] = new_lang
-        save_user_languages(user_languages)
+        save_json(LANG_FILE, user_languages)
         msg = loc[new_lang]['phrases']['lang_set_msg']
-        bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, parse_mode="HTML")
+        bot.edit_message_text(msg, chat_id, call.message.message_id, parse_mode="HTML")
         return
 
-    lang = user_languages.get(chat_id, 'en')
-    data_parts = call.data.split('_')
-    act, c_id = data_parts[0], "_".join(data_parts[1:])
-    char = get_char_by_id(c_id)
-    if not char: return
-    
-    txt = format_relic_text(char, lang) if act == "relic" else format_gear_text(char, lang)
-    kb = make_kb(c_id, act, lang)
+    if call.data == "conf_sys":
+        # Вызов конфига из кнопки
+        config_cmd(call.message)
+        return
 
-    try:
-        if call.message.photo and len(txt) <= 1024:
-            bot.edit_message_caption(txt, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=kb)
-        else:
-            bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode="HTML", reply_markup=kb)
-    except: pass
-
+# --- ЗАПУСК ---
 app = Flask('')
 @app.route('/')
 def home(): return "OK"
