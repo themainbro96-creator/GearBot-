@@ -20,7 +20,7 @@ user_data = {}  # {chat_id: 'lang'}
 user_ids = set()
 gear_cache = {} 
 search_cache = {} 
-pending_post = set() # Список админов, от которых бот ждет пост
+pending_post = set() # Список чатов, от которых бот ждет пост
 
 def load_base_data():
     try:
@@ -32,6 +32,7 @@ def load_base_data():
             loc_data = json.load(f)
         return chars, gear, loc_data
     except Exception as e:
+        print(f"Ошибка загрузки баз данных: {e}")
         return [], [], {}
 
 chars_data, gear_data, loc = load_base_data()
@@ -90,13 +91,14 @@ def handle_all_messages(message):
         count = 0
         for uid in user_ids:
             try:
+                # copy_message копирует сообщение 1 в 1 со всеми картинками и шрифтами
                 bot.copy_message(uid, chat_id, message.message_id)
                 count += 1
             except: continue
         bot.send_message(chat_id, f"✅ Рассылка завершена. Получили: {count} пользователей.")
         return
 
-    # Если это не текст, дальше не идем
+    # Если это не текст или это другая команда, дальше не идем
     if not message.text or message.text.startswith('/'): return
 
     lang = user_data.get(chat_id, 'ru')
@@ -120,9 +122,13 @@ def handle_all_messages(message):
             for g_id in char['gear_levels'][t_idx]['gear']:
                 orig = gear_dict.get(g_id, g_id)
                 items.append(f"— {get_cached_translation(orig, lang)}")
-            caption = f"<b>{best_match}</b>\n<b>Тир {t_idx+1}</b>\n\n<blockquote>" + "\n".join(items) + "</blockquote>"
+            
+            char_name_display = best_match if lang == 'en' else get_cached_translation(best_match, lang)
+            caption = f"<b>{char_name_display}</b>\n<b>Тир {t_idx+1}</b>\n\n<blockquote>" + "\n".join(items) + "</blockquote>"
         else:
-            caption = f"<b>{get_cached_translation(char['name'], lang)}</b>\n\nНапиши 'имя номер', чтобы увидеть детали конкретного тира."
+            char_name_display = best_match if lang == 'en' else get_cached_translation(best_match, lang)
+            hint = "Напиши 'имя номер', чтобы увидеть детали конкретного тира." if lang == 'ru' else "Type 'name number' to see specific tier details."
+            caption = f"<b>{char_name_display}</b>\n\n{hint}"
 
         bot.delete_message(chat_id, wait_msg.message_id)
         bot.send_photo(chat_id, char['image'], caption=caption, parse_mode="HTML")
@@ -131,7 +137,9 @@ def handle_all_messages(message):
         markup = types.InlineKeyboardMarkup()
         for m in matches:
             markup.add(types.InlineKeyboardButton(m[0], callback_data=f"search_{m[0]}"))
-        bot.send_message(chat_id, "Юнит не найден, напиши снова. Возможно ты искал кого-то из ниже перечисленных:", reply_markup=markup)
+        
+        error_msg = "Юнит не найден, напиши снова. Возможно ты искал кого-то из ниже перечисленных:" if lang == 'ru' else "Unit not found, try again. Maybe you were looking for one of these:"
+        bot.send_message(chat_id, error_msg, reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
@@ -143,7 +151,7 @@ def callback_handler(call):
         bot.edit_message_text(msg, chat_id, call.message.message_id)
     elif call.data.startswith("search_"):
         name = call.data.replace("search_", "")
-        # Имитируем сообщение от пользователя
+        # Имитируем сообщение от пользователя для повторного поиска
         call.message.text = name
         handle_all_messages(call.message)
 
