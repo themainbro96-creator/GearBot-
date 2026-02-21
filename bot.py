@@ -14,80 +14,56 @@ TOKEN = os.environ.get('TOKEN')
 bot = telebot.TeleBot(TOKEN)
 translator = GoogleTranslator(source='en', target='ru')
 start_time = time.time()
-VERSION = "2.5.0 (Turbo Speed)"
+VERSION = "2.6.0 (No-Save Edition)"
 
-LANG_FILE = 'user_languages.json'
-CACHE_FILE = 'translation_cache.json'
-
-def load_json(filename):
-    if os.path.exists(filename):
-        try:
-            with open(filename, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except: return {}
-    return {}
-
-def save_json(filename, data):
-    try:
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except: pass
-
-user_languages = load_json(LANG_FILE)
-search_cache = load_json(CACHE_FILE) # Здесь храним и имена, и описания, и ГИР!
+# Кэш в оперативной памяти (сбросится при перезагрузке сервера)
+user_languages = {}
+search_cache = {}
 
 def load_base_data():
+    """Загрузка игровых данных (эти файлы ДОЛЖНЫ быть в GitHub)"""
     try:
         with open('Swgoh_Characters.json', 'r', encoding='utf-8') as f:
-            chars = json.loads(json.load(f)['text'])
+            # Читаем структуру swgoh.gg
+            data = json.load(f)
+            chars = json.loads(data['text']) if 'text' in data else data
         with open('Swgoh_Gear.json', 'r', encoding='utf-8') as f:
-            gear = json.loads(json.load(f)['text'])
+            data = json.load(f)
+            gear = json.loads(data['text']) if 'text' in data else data
         with open('localization.json', 'r', encoding='utf-8') as f:
             loc_data = json.load(f)
         return chars, gear, loc_data
     except Exception as e:
+        print(f"Ошибка загрузки базы: {e}")
         return [], [], {}
 
 chars_data, gear_data, loc = load_base_data()
 gear_dict = {item['base_id']: item['name'] for item in gear_data}
 char_names = [c['name'] for c in chars_data]
 
-# --- СУПЕР-БЫСТРАЯ ЛОГИКА ПЕРЕВОДА ---
+# --- ЛОГИКА ПЕРЕВОДА ---
 
 def smart_translate(text, lang, category):
-    """
-    Алгоритм: 
-    1. Если язык английский -> сразу возврат.
-    2. Если есть в localization.json -> мгновенный возврат.
-    3. Если есть в кэше (памяти) -> мгновенный возврат.
-    4. Если нет нигде -> переводим ОДИН РАЗ и запоминаем навсегда.
-    """
-    if lang == 'en' or not text:
-        return text
+    if lang == 'en' or not text: return text
     
-    # 1. Проверка в локализации (твой файл)
+    # 1. Сначала ищем в твоем файле localization.json
     if text in loc.get('ru', {}).get(category, {}):
         return loc['ru'][category][text]
     
-    # 2. Проверка в кэше перевода (память)
+    # 2. Потом ищем в кэше памяти
     cache_key = f"{category}:{text}"
     if cache_key in search_cache:
         return search_cache[cache_key]
     
-    # 3. Крайний случай - Google (только один раз для нового предмета)
+    # 3. Если нет - переводим (только один раз за сессию)
     try:
-        # Для гира можно вообще отключить автоперевод, если хочешь 0 задержек:
-        # if category == 'gear_materials': return text 
-        
         translated = translator.translate(text)
         search_cache[cache_key] = translated
-        save_json(CACHE_FILE, search_cache)
         return translated
     except:
         return text
 
 def get_english_query(query):
-    """Перевод поискового запроса юзера (напр. 'Падме' -> 'Padme')"""
     query_clean = query.lower().strip()
     if not re.search('[а-яА-Я]', query_clean):
         return query_clean
@@ -99,7 +75,6 @@ def get_english_query(query):
     try:
         translated = GoogleTranslator(source='ru', target='en').translate(query_clean)
         search_cache[cache_key] = translated
-        save_json(CACHE_FILE, search_cache)
         return translated
     except: return query_clean
 
@@ -111,18 +86,46 @@ def format_gear_text(char, lang='en'):
     t_text = loc[lang]['phrases']['tier']
     
     res = f"<b>{name}</b>\n<i>{desc}</i>\n\n"
-    for i, level in enumerate(char['gear_levels']):
-        items = []
-        for g_id in level['gear']:
-            orig_name = gear_dict.get(g_id, g_id)
-            # Ищем перевод в локализации или кэше
-            trans_name = smart_translate(orig_name, lang, 'gear_materials')
-            items.append(f"— {trans_name}")
-        res += f"<b>{t_text} {i+1}</b>\n<blockquote>" + "\n".join(items) + "</blockquote>\n"
+    # Для экономии времени/памяти выводим только последние 3 уровня снаряжения 
+    # или используйте запрос с номером тира для конкретики
+    levels_to_show = char['gear_levels'][-3:] # Показать последние 3
+    
+    res += f"(Показаны последние уровни. Напишите <b>'{query_clean} 12'</b> для деталей)\n\n"
+    
+    for i, level in enumerate(levels_to_show):
+        level_idx = len(char['gear_levels']) - 3 + i + 1
+        items = [f"— {smart_translate(gear_dict.get(g, g), lang, 'gear_materials')}" for g in level['gear']]
+        res += f"<b>{t_text} {level_idx}</b>\n<blockquote>" + "\n".join(items) + "</blockquote>\n"
     return res
 
-# Остальные функции (make_kb, команды /start, /config) остаются такими же...
-# [Вставь здесь команды из прошлого кода]
+def make_kb(char_id, lang='en'):
+    markup = types.InlineKeyboardMarkup()
+    btns = loc[lang]['buttons']
+    markup.add(types.InlineKeyboardButton(btns['configuration'], callback_data="conf_sys"))
+    return markup
+
+# --- ОБРАБОТЧИКИ ---
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton("🇷🇺 Русский", callback_data="setlang_ru"),
+        types.InlineKeyboardButton("🇬🇧 Английский", callback_data="setlang_en")
+    )
+    bot.send_message(message.chat.id, f"sup, {message.from_user.first_name}! Выбери язык / Choose language:", reply_markup=markup)
+
+@bot.message_handler(commands=['config'])
+def config_cmd(message):
+    uptime = f"{int(time.time() - start_time)}s"
+    info = (
+        f"🛠 <b>System Config</b>\n"
+        f"— Version: <code>{VERSION}</code>\n"
+        f"— Mode: <code>In-Memory Cache</code>\n"
+        f"— Uptime: <code>{uptime}</code>\n"
+        f"— Cached items: <code>{len(search_cache)}</code>"
+    )
+    bot.send_message(message.chat.id, info, parse_mode="HTML")
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
@@ -155,14 +158,33 @@ def handle_message(message):
 
         bot.delete_message(message.chat.id, wait_msg.message_id)
         
-        # Отправка...
         if len(caption) > 1024:
             bot.send_photo(message.chat.id, char['image'])
-            bot.send_message(message.chat.id, caption[:4096], parse_mode="HTML", reply_markup=make_kb(char['base_id'], lang))
+            bot.send_message(message.chat.id, caption[:4000], parse_mode="HTML", reply_markup=make_kb(char['base_id'], lang))
         else:
             bot.send_photo(message.chat.id, char['image'], caption=caption, parse_mode="HTML", reply_markup=make_kb(char['base_id'], lang))
     else:
         bot.delete_message(message.chat.id, wait_msg.message_id)
         bot.reply_to(message, loc[lang]['phrases']['unit_not_found'])
 
-# [Flask и запуск]
+@bot.callback_query_handler(func=lambda call: True)
+def callback(call):
+    chat_id = str(call.message.chat.id)
+    if call.data.startswith("setlang_"):
+        new_lang = call.data.split('_')[1]
+        user_languages[chat_id] = new_lang
+        bot.edit_message_text(loc[new_lang]['phrases']['lang_set_msg'], chat_id, call.message.message_id, parse_mode="HTML")
+    elif call.data == "conf_sys":
+        config_cmd(call.message)
+
+# --- WEB SERVER ---
+app = Flask('')
+@app.route('/')
+def home(): return "OK"
+def run(): 
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
+
+if __name__ == "__main__":
+    Thread(target=run).start()
+    bot.infinity_polling()
